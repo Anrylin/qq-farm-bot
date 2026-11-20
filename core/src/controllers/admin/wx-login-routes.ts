@@ -47,7 +47,25 @@ function mountWxLoginRoutes(app: Application, ctx: AdminContext): void {
         destroy(task);
         return res.json({ ok: true });
     });
-    app.get('/api/wx-login/tasks/:taskId/status', async (req, res) => { const task = findTask(req, res); if (!task) return; try { if (!task.pending) task.pending = poll(task).finally(() => { task.pending = undefined; }); await task.pending; const data = publicTask(task); if (task.status === 'cancelled' || task.status === 'expired') destroy(task); res.json({ ok: true, data }); } catch (error: any) { task.status = 'failed'; destroy(task); res.status(502).json({ ok: false, error: error.message }); } });
+    // 修复：原先 await task.pending 会阻塞到微信长轮询结束（实测 15 秒），
+    // 隧道/反代在 10~15 秒掐连接，前端就会报 "Network Error"。
+    // 现在最多等 2 秒就把当前状态返回，长轮询留在后台继续跑。
+    app.get('/api/wx-login/tasks/:taskId/status', async (req, res) => {
+        const task = findTask(req, res);
+        if (!task) return;
+        if (!task.pending) {
+            task.pending = poll(task)
+                .catch(() => { task.status = 'failed'; })
+                .finally(() => { task.pending = undefined; });
+        }
+        await Promise.race([
+            task.pending,
+            new Promise(resolve => setTimeout(resolve, 2000)),
+        ]);
+        const data = publicTask(task);
+        if (task.status === 'cancelled' || task.status === 'expired') destroy(task);
+        res.json({ ok: true, data });
+    });
     app.post('/api/wx-login/tasks/:taskId/confirm', async (req, res) => { const task = findTask(req, res); if (!task) return; try { if (!task.pending) task.pending = confirm(task).finally(() => { task.pending = undefined; }); await task.pending; res.json({ ok: true, data: publicTask(task) }); } catch (error: any) { task.status = 'failed'; destroy(task); res.status(502).json({ ok: false, error: error.message }); } });
     app.post('/api/wx-login/tasks/:taskId/code', async (req, res) => { const task = findTask(req, res); if (!task) return; try { if (!task.pending) task.pending = consumeCode(task).finally(() => { task.pending = undefined; }); await task.pending; const data = { openid: task.session.openid, app_id: TARGET_APP_ID, code: task.code, nickname: task.session.nickname || '', err_msg: 'login:ok' }; destroy(task); res.json({ ok: true, data }); } catch (error: any) { task.status = 'failed'; destroy(task); res.status(502).json({ ok: false, error: error.message }); } });
 }

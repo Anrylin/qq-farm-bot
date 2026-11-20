@@ -94,6 +94,11 @@ async function requestNapCat(path: string, body: Record<string, unknown>, requir
     catch (error: any) {
         if (error?.code === 'ECONNABORTED' || error?.message?.includes('timeout'))
             throw new Error('NapCat 接口请求超时，请检查服务状态');
+        // 修复：原先只按非 200 一律报"无法连接"，把 NapCat 的真实原因吞掉了
+        // （例如 503 + {"message":"OneBot context not available"} 其实代表没登录 QQ）。
+        const pluginMessage = error?.response?.data?.message || error?.response?.data?.error;
+        if (pluginMessage)
+            throw new Error(`NapCat 接口返回失败：${pluginMessage}`);
         throw new Error('无法连接 NapCat 接口，请检查地址和服务状态');
     }
 
