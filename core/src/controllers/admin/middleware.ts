@@ -8,6 +8,7 @@ const { normalizeAccountRef, resolveAccountId } = require('../../services/accoun
 
 interface AuthenticatedRequest extends Request {
     adminToken?: string;
+    currentUser?: { username: string, role: 'admin' | 'user' };
 }
 
 function getClientIp(req: Request): string {
@@ -34,7 +35,23 @@ function createAuthRequired(ctx: AdminContext) {
             return;
         }
         req.adminToken = token;
+        // 老 token（升级前签发）没有会话记录，按上游原行为视为超级管理员
+        req.currentUser = ctx.sessions.get(token) || { username: 'admin', role: 'admin' };
         next();
+    };
+}
+
+/** 仅超级管理员可访问（多用户接入后，普通用户不能进后台管理接口） */
+function createAdminOnly(ctx: AdminContext) {
+    const authRequired = createAuthRequired(ctx);
+    return (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
+        authRequired(req, res, () => {
+            if (req.currentUser?.role !== 'admin') {
+                res.status(403).json({ ok: false, error: '需要超级管理员权限' });
+                return;
+            }
+            next();
+        });
     };
 }
 
@@ -49,6 +66,29 @@ function getAccountList(ctx: AdminContext): any[] {
     }
     const data = store.getAccounts ? store.getAccounts() : { accounts: [] };
     return Array.isArray(data.accounts) ? data.accounts : [];
+}
+
+/** 账号归属：迁移数据用 ownerUsername，上游新增账号用 ownerUsername/username 兜底 */
+function getAccountOwner(account: any): string {
+    return String(account?.ownerUsername || account?.username || '').trim();
+}
+
+/** 当前用户可见的账号（管理员看全部） */
+function getVisibleAccounts(ctx: AdminContext, req: Request): any[] {
+    const list = getAccountList(ctx);
+    const current = (req as any).currentUser;
+    if (!current || current.role === 'admin') return list;
+    return list.filter((account: any) => getAccountOwner(account) === current.username);
+}
+
+/** 是否允许访问该账号 */
+function canAccessAccount(ctx: AdminContext, req: Request, accountId: any): boolean {
+    const current = (req as any).currentUser;
+    if (!current || current.role === 'admin') return true;
+    const id = String(accountId || '');
+    if (!id) return false;
+    const account = getAccountList(ctx).find((item: any) => String(item.id || '') === id);
+    return !!account && getAccountOwner(account) === current.username;
 }
 
 function getAccountIds(ctx: AdminContext): string[] {
@@ -104,7 +144,10 @@ function resolveAccId(ctx: AdminContext, rawRef: any): string {
 }
 
 function getAccId(ctx: AdminContext, req: Request): string {
-    return resolveAccId(ctx, req.headers['x-account-id']);
+    const id = resolveAccId(ctx, req.headers['x-account-id']);
+    // 越权访问直接返回空，由各路由按"缺少账号标识"处理，不泄露账号存在性
+    if (id && !canAccessAccount(ctx, req, id)) return '';
+    return id;
 }
 
 function buildKnownFriendGidSettings(accountId: string): {
@@ -127,7 +170,11 @@ module.exports = {
     getClientIp,
     issueToken,
     createAuthRequired,
+    createAdminOnly,
     getAccountList,
+    getVisibleAccounts,
+    getAccountOwner,
+    canAccessAccount,
     getAccountIds,
     isSoftRuntimeError,
     isGatewayProtocolError,

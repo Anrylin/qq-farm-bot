@@ -152,6 +152,13 @@ function hashPassword(password: string, salt: string | null = null): string {
 }
 
 function verifyPassword(password: string, storedPassword: string): boolean {
+    // 迁移用户：scrypt$salt$hash（旧 2.8.0 版本算法）
+    if (storedPassword.startsWith('scrypt$')) {
+        const [, salt, hash] = storedPassword.split('$');
+        if (!salt || !hash) return false;
+        const actual = crypto.scryptSync(password, salt, 64).toString('hex');
+        return actual === hash;
+    }
     if (storedPassword.includes(':')) {
         const [salt, hash] = storedPassword.split(':');
         const nextHash = crypto.pbkdf2Sync(password, salt, ITERATIONS, KEY_LENGTH, DIGEST).toString('hex');

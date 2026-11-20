@@ -42,14 +42,29 @@ function loadAdmin(): AdminRecord {
         admin = null;
     }
     if (!admin) {
-        admin = {
-            username: 'admin',
-            password: security.hashPassword('admin'),
-            createdAt: Date.now(),
-            mustChangePassword: true,
-        };
+        // 迁移场景：users.json 里的 admin 记录带着旧的 scrypt 密码，
+        // 继承过来，避免迁移后管理员必须重置密码。
+        let inherited: { username: string, password: string } | null = null;
+        try {
+            const migrated = require('./user-store').findUser('admin');
+            if (migrated && migrated.passwordAlgo === 'scrypt' && migrated.password) {
+                inherited = { username: 'admin', password: `scrypt$${migrated.password}` };
+            }
+        } catch {
+            inherited = null;
+        }
+        admin = inherited
+            ? { username: inherited.username, password: inherited.password, createdAt: Date.now() }
+            : {
+                username: 'admin',
+                password: security.hashPassword('admin'),
+                createdAt: Date.now(),
+                mustChangePassword: true,
+            };
         saveAdmin();
-        console.log('[管理员] 已创建默认账号 admin，默认密码 admin');
+        console.log(inherited
+            ? '[管理员] 已从 users.json 继承管理员账号与密码'
+            : '[管理员] 已创建默认账号 admin，默认密码 admin');
     }
     return admin;
 }
@@ -75,7 +90,7 @@ function validateAdmin(username: string, password: string, ip: string = 'unknown
     }
 
     security.clearFailedAttempts();
-    if (security.needsRehash(current.password)) {
+    if (current.password.startsWith('scrypt$') || security.needsRehash(current.password)) {
         current.password = security.hashPassword(password);
         saveAdmin();
     }

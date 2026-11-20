@@ -19,6 +19,8 @@ const { mountAccountRoutes } = require('./account-routes');
 const { mountFarmRoutes } = require('./farm-routes');
 const { mountFriendRoutes } = require('./friend-routes');
 const { mountActivityCenterRoutes } = require('./activity-center-routes');
+const { mountUserRoutes } = require('./user-routes');
+const { mountAgentRoutes } = require('./agent-routes');
 const { mountCommerceRoutes } = require('./commerce-routes');
 const { mountWxLoginRoutes } = require('./wx-login-routes');
 const { mountQqLoginRoutes } = require('./qq-login-routes');
@@ -74,6 +76,8 @@ function startAdminServer(dataProvider: any): void {
 
     // Mount route modules
     mountAuthRoutes(app, ctx);
+    mountUserRoutes(app, ctx);
+    mountAgentRoutes(app, ctx);
     mountWxLoginRoutes(app, ctx);
     mountQqLoginRoutes(app, ctx);
     mountFarmRoutes(app, ctx);

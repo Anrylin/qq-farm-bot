@@ -16,6 +16,9 @@ const {
     getAccountIds,
     handleApiError,
     getAccountList,
+    getVisibleAccounts,
+    getAccountOwner,
+    canAccessAccount,
     resolveAccId,
 } = require('./middleware');
 
@@ -25,7 +28,9 @@ function mountAccountRoutes(app: Application, ctx: AdminContext): void {
     app.get('/api/accounts', (req: Request, res: Response) => {
         try {
             const data = ctx.provider.getAccounts();
-            res.json({ ok: true, data });
+            const accounts = Array.isArray(data?.accounts) ? data.accounts : [];
+            const visible = getVisibleAccounts(ctx, req);
+            res.json({ ok: true, data: { ...data, accounts: visible, total: accounts.length } });
         } catch (e: any) {
             handleApiError(res, e);
         }
@@ -61,8 +66,9 @@ function mountAccountRoutes(app: Application, ctx: AdminContext): void {
         }
     });
 
-    app.post('/api/accounts', (req: Request, res: Response) => {
+    app.post('/api/accounts', (req: Request & { currentUser?: any }, res: Response) => {
         try {
+            const current = (req as any).currentUser;
             const rawBody = (req.body && typeof req.body === 'object') ? req.body : {};
             const requestedName = typeof rawBody.name === 'string' ? rawBody.name.trim() : '';
             const body = typeof rawBody.name === 'string' ? { ...rawBody, name: requestedName } : rawBody;
@@ -99,6 +105,23 @@ function mountAccountRoutes(app: Application, ctx: AdminContext): void {
                 }
             }
 
+            // 多租户：账号归属与数量配额
+            if (current && current.role !== 'admin') {
+                if (isUpdate && !canAccessAccount(ctx, req, payload.id)) {
+                    return res.status(403).json({ ok: false, error: '无权操作此账号' });
+                }
+                if (!isUpdate) {
+                    const userStore = require('../../models/user-store');
+                    const user = userStore.findUser(current.username);
+                    const limit = Number(user?.accountLimit) || 0;
+                    const owned = getVisibleAccounts(ctx, req).length;
+                    if (limit > 0 && owned >= limit) {
+                        return res.status(403).json({ ok: false, error: `账号数量已达上限（${limit}）` });
+                    }
+                    payload.ownerUsername = current.username;
+                }
+            }
+
             const data = addOrUpdateAccount(payload);
             if (ctx.provider.addAccountLog) {
                 const accountId = isUpdate ? String(payload.id) : String((data.accounts.at(-1) || {}).id || '');
@@ -132,6 +155,9 @@ function mountAccountRoutes(app: Application, ctx: AdminContext): void {
     app.delete('/api/accounts/:id', (req: Request, res: Response) => {
         try {
             const resolvedId = resolveAccId(ctx, req.params.id) || String(req.params.id || '');
+            if (!canAccessAccount(ctx, req, resolvedId)) {
+                return res.status(403).json({ ok: false, error: '无权操作此账号' });
+            }
 
             const before = ctx.provider.getAccounts();
             const target = findAccountByRef(before.accounts || [], req.params.id);
