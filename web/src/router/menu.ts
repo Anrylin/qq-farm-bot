@@ -4,6 +4,10 @@ export interface MenuItem {
   label: string
   icon: string
   component: () => Promise<any>
+  /** 可见角色；缺省表示所有登录用户可见 */
+  roles?: ('admin' | 'user')[]
+  /** 代理专属（role=user 且 isAgent=true） */
+  agentOnly?: boolean
   meta?: {
     fullBleed?: boolean
     gameSpace?: 'ranch'
@@ -67,6 +71,31 @@ export const menuRoutes: MenuItem[] = [
     label: '游戏商城',
     icon: 'i-carbon-shopping-cart',
     component: () => import('@/views/GameMall.vue'),
+  },
+  {
+    path: 'admin-console',
+    name: 'admin-console',
+    label: '管理台',
+    icon: 'i-carbon-settings-admin',
+    component: () => import('@/views/AdminConsole.vue'),
+    roles: ['admin'],
+  },
+  {
+    path: 'account',
+    name: 'account',
+    label: '我的',
+    icon: 'i-carbon-user-avatar',
+    component: () => import('@/views/Account.vue'),
+    roles: ['user'],
+  },
+  {
+    path: 'agent',
+    name: 'agent',
+    label: '代理',
+    icon: 'i-carbon-share-knowledge',
+    component: () => import('@/views/Agent.vue'),
+    roles: ['user'],
+    agentOnly: true,
   },
   {
     path: 'settings',

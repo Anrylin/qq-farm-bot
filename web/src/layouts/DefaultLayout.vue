@@ -3,6 +3,7 @@ import { useResizeObserver } from '@vueuse/core'
 import { storeToRefs } from 'pinia'
 import { computed, nextTick, provide, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import AnnouncementBanner from '@/components/AnnouncementBanner.vue'
 import MobileBottomNav from '@/components/MobileBottomNav.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import Sidebar from '@/components/Sidebar.vue'
@@ -65,6 +66,7 @@ useResizeObserver(scrollEl, measureScrollbar)
             <div ref="pageTabsTarget" class="page-tabs-host" />
           </div>
         </div>
+        <AnnouncementBanner />
         <div
           ref="scrollEl"
           class="page-scroll custom-scrollbar flex flex-1 flex-col"

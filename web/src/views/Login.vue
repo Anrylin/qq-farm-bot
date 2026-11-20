@@ -187,15 +187,21 @@ onMounted(fetchGameVersion)
         </BaseButton>
       </form>
 
+      <div class="login-links">
+        <router-link to="/register" class="link-btn">
+          <span class="i-carbon-user-follow" />注册账号
+        </router-link>
+        <router-link to="/renew" class="link-btn">
+          <span class="i-carbon-renew" />账号续费
+        </router-link>
+      </div>
+
       <footer class="card-footer">
         <div class="footer-info">
           <span>Web v{{ appVersion }}</span>
           <span v-if="gameVersion">QQ {{ gameVersion }}</span>
           <span v-if="wxGameVersion">微信 {{ wxGameVersion }}</span>
         </div>
-        <a href="https://github.com/liyangpengs/qq-farm-bot" target="_blank" rel="noopener noreferrer" class="github-link" aria-label="GitHub">
-          <span class="i-carbon-logo-github" />
-        </a>
       </footer>
     </section>
   </main>
@@ -347,6 +353,33 @@ onMounted(fetchGameVersion)
   margin-top: 2px;
 }
 
+.login-links {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.link-btn {
+  display: inline-flex;
+  flex: 1;
+  gap: 6px;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 10px;
+  border: 1px solid var(--ui-border);
+  border-radius: 10px;
+  font-size: 12px;
+  color: var(--ui-muted);
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+
+.link-btn:hover {
+  border-color: var(--ui-primary);
+  color: var(--ui-primary);
+  background: var(--ui-primary-soft);
+}
+
 .card-footer {
   display: flex;
   align-items: center;
@@ -362,21 +395,6 @@ onMounted(fetchGameVersion)
   display: flex;
   flex-wrap: wrap;
   gap: 4px 12px;
-}
-
-.github-link {
-  display: grid;
-  width: 30px;
-  height: 30px;
-  place-items: center;
-  border-radius: 8px;
-  color: var(--ui-muted);
-  text-decoration: none;
-}
-
-.github-link:hover {
-  color: var(--ui-primary);
-  background: var(--ui-primary-soft);
 }
 
 @media (max-width: 480px) {

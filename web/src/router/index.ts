@@ -60,11 +60,27 @@ const router = createRouter({
       name: 'login',
       component: () => import('@/views/Login.vue'),
     },
+    {
+      path: '/register',
+      name: 'register',
+      component: () => import('@/views/Register.vue'),
+      meta: { public: true },
+    },
+    {
+      path: '/renew',
+      name: 'renew',
+      component: () => import('@/views/Renew.vue'),
+      meta: { public: true },
+    },
   ],
 })
 
 router.beforeEach(async (to, _from) => {
   NProgress.start()
+
+  // 公开页面：注册 / 续费
+  if (to.meta?.public)
+    return true
 
   if (to.name === 'login') {
     if (!adminToken.value) {

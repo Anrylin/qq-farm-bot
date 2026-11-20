@@ -40,6 +40,8 @@ let wxPollController: AbortController | undefined
 let wxPollInFlight: Promise<void> | undefined
 let wxPollKey = ''
 let wxPendingCode = ''
+const qqQueueEntryId = ref('')
+const qqQueuePosition = ref(0)
 const qqTaskId = ref('')
 const qqStatus = ref('')
 const qqError = ref('')
@@ -48,6 +50,7 @@ const qqQrUrl = ref('')
 let qqPollTimer: ReturnType<typeof setTimeout> | undefined
 let qqFlowVersion = 0
 let qqPollController: AbortController | undefined
+let qqQueueTimer: ReturnType<typeof setTimeout> | undefined
 let qqPollInFlight: Promise<void> | undefined
 let qqPollKey = ''
 let qqPendingCode = ''
@@ -395,12 +398,25 @@ function stopQqPolling() {
   qqPollController = undefined
 }
 
+function stopQueuePolling() {
+  if (qqQueueTimer) {
+    clearTimeout(qqQueueTimer)
+    qqQueueTimer = undefined
+  }
+}
+
 function resetQqLogin() {
   const taskId = qqTaskId.value
+  const queueEntryId = qqQueueEntryId.value
   qqFlowVersion += 1
   stopQqPolling()
+  stopQueuePolling()
   if (taskId)
     void cancelQqLoginTask(taskId)
+  else if (queueEntryId)
+    void api.post(`/api/qq-login/queue/${queueEntryId}/leave`, undefined, { skipErrorToast: true } as any).catch(() => undefined)
+  qqQueueEntryId.value = ''
+  qqQueuePosition.value = 0
   qqTaskId.value = ''
   qqStatus.value = ''
   qqError.value = ''
@@ -556,6 +572,19 @@ async function startQqLogin() {
     const response = await api.post('/api/qq-login/tasks')
     const payload = ensureQqApiOk(response, 'QQ 登录二维码获取失败')
     const task = payload?.data
+
+    // 有人正在扫码：进入排队，轮到自己时再拿二维码
+    if (task?.queued) {
+      if (flowVersion !== qqFlowVersion)
+        return
+      qqQueueEntryId.value = String(task.entry_id || '')
+      qqQueuePosition.value = Number(task.position) || 1
+      qqStatus.value = String(task.message || `排队中（第 ${qqQueuePosition.value} 位）`)
+      qqLoading.value = false
+      scheduleQueuePoll(flowVersion)
+      return
+    }
+
     const taskId = String(task?.task_id || '')
     const qrImage = String(task?.qr_image || '')
     if (!taskId || !qrImage)
@@ -574,6 +603,52 @@ async function startQqLogin() {
   finally {
     if (flowVersion === qqFlowVersion)
       qqLoading.value = false
+  }
+}
+
+function scheduleQueuePoll(flowVersion: number) {
+  stopQueuePolling()
+  qqQueueTimer = setTimeout(() => void pollQqQueue(flowVersion), 2000)
+}
+
+async function pollQqQueue(flowVersion: number) {
+  const entryId = qqQueueEntryId.value
+  if (!entryId || flowVersion !== qqFlowVersion)
+    return
+  try {
+    const { data } = await api.get(`/api/qq-login/queue/${entryId}`, { skipErrorToast: true } as any)
+    if (flowVersion !== qqFlowVersion)
+      return
+    if (!data?.ok) {
+      qqError.value = String(data?.error || '排队已失效，请重新发起 QQ 扫码')
+      qqQueueEntryId.value = ''
+      return
+    }
+    const payload = data.data || {}
+    if (payload.queued) {
+      qqQueuePosition.value = Number(payload.position) || 1
+      qqStatus.value = String(payload.message || `排队中（第 ${qqQueuePosition.value} 位）`)
+      scheduleQueuePoll(flowVersion)
+      return
+    }
+    const taskId = String(payload.task_id || '')
+    const qrImage = String(payload.qr_image || '')
+    if (!taskId || !qrImage) {
+      qqError.value = '排队已轮到，但二维码获取失败，请重新发起'
+      qqQueueEntryId.value = ''
+      return
+    }
+    qqQueueEntryId.value = ''
+    qqTaskId.value = taskId
+    qqQrUrl.value = qrImage
+    qqStatus.value = '轮到你了，请尽快扫码'
+    void pollQqLogin(taskId, flowVersion)
+  }
+  catch (error: any) {
+    if (flowVersion !== qqFlowVersion)
+      return
+    qqError.value = getApiErrorMessage(error, '排队状态查询失败')
+    scheduleQueuePoll(flowVersion)
   }
 }
 

@@ -1233,8 +1233,8 @@ async function handleChangePassword() {
   try {
     const res = await userStore.changePassword(passwordForm.value.old, passwordForm.value.new)
 
-    if (res.ok) {
-      showAlert('密码修改成功，请重新登录', 'primary')
+    if (res?.ok) {
+      showAlert('密码修改成功，请使用新密码重新登录', 'primary')
       passwordForm.value = { old: '', new: '', confirm: '' }
       setTimeout(() => {
         userStore.logout()
@@ -1242,8 +1242,14 @@ async function handleChangePassword() {
       }, 1500)
     }
     else {
-      showAlert(`修改失败: ${res.error || '未知错误'}`, 'danger')
+      showAlert(`修改失败: ${res?.error || '未知错误'}`, 'danger')
     }
+  }
+  catch (error: any) {
+    // 修复：原实现只有 try/finally，请求异常（401/网络错误）时静默失败，
+    // 用户会误以为改成功了，再登录却对不上新密码。
+    const message = error?.response?.data?.error || error?.message || '请求失败'
+    showAlert(`修改失败: ${message}（密码未变更）`, 'danger')
   }
   finally {
     passwordSaving.value = false

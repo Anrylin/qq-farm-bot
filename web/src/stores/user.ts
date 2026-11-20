@@ -3,11 +3,21 @@ import { defineStore } from 'pinia'
 import { computed } from 'vue'
 import api, { getApiErrorMessage } from '@/api'
 
+export type UserRole = 'admin' | 'user'
+
 export interface AdminInfo {
   username: string
-  role: 'admin'
+  role: UserRole
   avatar?: string
   mustChangePassword?: boolean
+  /** 普通用户字段 */
+  accountLimit?: number
+  expiresAt?: number
+  expired?: boolean
+  locked?: boolean
+  isAgent?: boolean
+  registrationQuota?: number
+  quotaCardQuota?: number
 }
 
 export interface LoginResult {
@@ -17,7 +27,7 @@ export interface LoginResult {
   remainingMs?: number
   data?: {
     token: string
-    role: 'admin'
+    role: UserRole
     user: { username: string }
     mustChangePassword?: boolean
   }
@@ -36,8 +46,9 @@ export const useUserStore = defineStore('user', () => {
       if (res.data.ok) {
         token.value = res.data.data.token
         userInfo.value = {
+          ...res.data.data.user,
           username: res.data.data.user.username,
-          role: 'admin',
+          role: res.data.data.role || 'admin',
           mustChangePassword: res.data.data.mustChangePassword,
         }
       }
