@@ -55,8 +55,10 @@ function napCatErrorMessage(data: any): string {
             return '上一位 QQ 登录尚未注销，请稍后重试';
         case 'TASK_EXPIRED':
             return 'QQ 登录任务已过期，请重新获取二维码';
+        case 'MINIAPP_FAILED':
+            return `小程序授权失败${data?.error ? `：${data.error}` : ''}（QQ 需处于已登录状态，且扫码后不要在其他设备登录同一 QQ）`;
         default:
-            return `NapCat 接口返回失败${errorCode ? `（${errorCode}）` : ''}`;
+            return `NapCat 接口返回失败${errorCode ? `（${errorCode}）` : ''}${data?.error ? `：${data.error}` : ''}`;
     }
 }
 
