@@ -18,8 +18,8 @@
  * 3. 默认写到暂存目录，不直接覆盖运行中实例的 data。
  *
  * 用法：
- *   node migrate-commercial.js --src /opt/data --dst /opt/upstream/migrated
- *   node migrate-commercial.js --src /opt/data --dst /opt/upstream/migrated --check
+ *   node migrate-commercial.js --src ./old-data --dst ./new-data --check
+ *   node migrate-commercial.js --src ./old-data --dst ./new-data
  */
 const fs = require('node:fs')
 const path = require('node:path')
@@ -30,8 +30,8 @@ function arg(name, fallback = '') {
     return index >= 0 && args[index + 1] ? args[index + 1] : fallback
 }
 
-const SRC = arg('src', '/opt/data')
-const DST = arg('dst', '/opt/upstream/migrated')
+const SRC = arg('src', './old-data')
+const DST = arg('dst', './new-data')
 const CHECK_ONLY = args.includes('--check')
 
 const report = {
