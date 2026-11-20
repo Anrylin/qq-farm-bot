@@ -1073,6 +1073,31 @@ async function saveAutomationSettings() {
 
 // ==================== 系统设置 ====================
 const passwordSaving = ref(false)
+
+// ===== 版本更新检测 =====
+const updateInfo = ref<any>(null)
+const updateLoading = ref(false)
+async function checkUpdate(force = false) {
+  updateLoading.value = true
+  try {
+    const { data } = await api.get('/api/update/check', {
+      params: force ? { force: 1 } : {},
+      timeout: 30000,
+    } as any)
+    updateInfo.value = data?.data || null
+  }
+  catch (error: any) {
+    updateInfo.value = { error: getApiErrorMessage(error, '检查更新失败') }
+  }
+  finally {
+    updateLoading.value = false
+  }
+}
+const updateBehind = computed(() => Number(updateInfo.value?.behind) || 0)
+
+// 打开设置页时静默检查一次（走服务端 30 分钟缓存，不会频繁打 GitHub）
+onMounted(() => { void checkUpdate() })
+
 const offlineSaving = ref(false)
 const offlineTesting = ref(false)
 
@@ -2214,6 +2239,55 @@ async function handleResetSystemConfig() {
                     修改管理员密码
                   </BaseButton>
                 </div>
+              </section>
+
+              <section class="farm-card rounded-lg p-4">
+                <div class="mb-4 flex items-start gap-3">
+                  <div class="h-9 w-9 flex shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-900/25 dark:text-blue-400">
+                    <span class="i-carbon-renew text-xl" />
+                  </div>
+                  <div class="flex-1">
+                    <h4 class="text-base text-gray-900 font-bold dark:text-gray-100">
+                      版本与更新
+                    </h4>
+                    <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                      对比 GitHub 仓库最新提交，只做检测，不会自动改动本机代码
+                    </p>
+                  </div>
+                  <BaseButton size="sm" :loading="updateLoading" @click="checkUpdate(true)">
+                    检查更新
+                  </BaseButton>
+                </div>
+
+                <div v-if="updateInfo" class="flex flex-col gap-2 text-sm">
+                  <div class="flex flex-wrap items-center gap-x-6 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
+                    <span>当前版本：<code class="font-mono">{{ updateInfo.current || '未记录' }}</code></span>
+                    <span>最新提交：<code class="font-mono">{{ updateInfo.latest || '—' }}</code></span>
+                    <span v-if="updateBehind > 0" class="text-amber-600 font-medium dark:text-amber-400">
+                      落后 {{ updateBehind }} 个提交
+                    </span>
+                    <span v-else-if="!updateInfo.error" class="text-green-600 dark:text-green-400">已是最新</span>
+                  </div>
+
+                  <p v-if="updateInfo.error" class="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-900/20 dark:text-amber-400">
+                    {{ updateInfo.error }}
+                  </p>
+
+                  <ul v-if="updateInfo.commits?.length" class="flex flex-col gap-1">
+                    <li
+                      v-for="commit in updateInfo.commits.slice(0, 6)"
+                      :key="commit.sha"
+                      class="flex items-center gap-2 rounded-md bg-gray-50 px-2 py-1 text-xs dark:bg-gray-800/60"
+                    >
+                      <code class="font-mono text-gray-500 dark:text-gray-400">{{ commit.sha }}</code>
+                      <span class="min-w-0 flex-1 truncate text-gray-700 dark:text-gray-300">{{ commit.message }}</span>
+                      <span class="shrink-0 text-gray-400">{{ (commit.date || '').slice(5, 16).replace('T', ' ') }}</span>
+                    </li>
+                  </ul>
+                </div>
+                <p v-else class="text-xs text-gray-500 dark:text-gray-400">
+                  打开本页时会自动检查一次
+                </p>
               </section>
 
               <section class="farm-card rounded-lg p-4">
