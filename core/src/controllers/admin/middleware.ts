@@ -70,7 +70,7 @@ function getAccountList(ctx: AdminContext): any[] {
 
 /** 账号归属：迁移数据用 ownerUsername，上游新增账号用 ownerUsername/username 兜底 */
 function getAccountOwner(account: any): string {
-    return String(account?.ownerUsername || account?.username || '').trim();
+    return String(account?.ownerUsername || account?.owner || account?.username || '').trim();
 }
 
 /** 当前用户可见的账号（管理员看全部） */

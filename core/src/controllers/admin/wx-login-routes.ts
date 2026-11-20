@@ -11,12 +11,12 @@ const { createAuthRequired } = require('./middleware');
 const TARGET_APP_ID = 'wx5306c5978fdb76e4';
 const TASK_TTL_MS = 110_000;
 type Status = ScanStatus | 'ready_for_code' | 'failed';
-interface Task { id: string; createdAt: number; status: Status; session: WxLoginSession; qr: Buffer; code?: string; pending?: Promise<void>; }
+interface Task { id: string; createdAt: number; status: Status; session: WxLoginSession; qr: Buffer; code?: string; pending?: Promise<void>; pollErrors?: number; lastError?: string; }
 const tasks = new Map<string, Task>();
 const wxLogin = new WxLoginService();
 
 function destroy(task: Task): void { wxLogin.destroy(task.session); task.code = undefined; tasks.delete(task.id); }
-function publicTask(task: Task) { return { task_id: task.id, app_id: TARGET_APP_ID, status: task.status, expires_at: Math.floor((task.createdAt + TASK_TTL_MS) / 1000) }; }
+function publicTask(task: Task) { return { task_id: task.id, app_id: TARGET_APP_ID, status: task.status, expires_at: Math.floor((task.createdAt + TASK_TTL_MS) / 1000), error: task.lastError || '' }; }
 function findTask(req: Request, res: Response): Task | null {
     const task = tasks.get(String(req.params.taskId || ''));
     if (!task || Date.now() - task.createdAt > TASK_TTL_MS) { if (task) destroy(task); res.status(404).json({ ok: false, error: 'Login task not found or expired' }); return null; }
@@ -39,7 +39,7 @@ async function consumeCode(task: Task): Promise<void> { if (task.status !== 'rea
 function mountWxLoginRoutes(app: Application, ctx: AdminContext): void {
     app.use('/api/wx-login', createAuthRequired(ctx));
 
-    app.post('/api/wx-login/tasks', async (req, res) => { if (req.body?.app_id && req.body.app_id !== TARGET_APP_ID) return res.status(400).json({ ok: false, error: 'Unsupported app_id' }); try { const task = await createTask(); res.json({ ok: true, data: { ...publicTask(task), qr_url: `/api/wx-login/tasks/${task.id}/qr` } }); } catch (error: any) { res.status(502).json({ ok: false, error: error.message }); } });
+    app.post('/api/wx-login/tasks', async (req, res) => { if (req.body?.app_id && req.body.app_id !== TARGET_APP_ID) return res.status(400).json({ ok: false, error: 'Unsupported app_id' }); try { const task = await createTask(); res.json({ ok: true, data: { ...publicTask(task), qr_url: `/api/wx-login/tasks/${task.id}/qr` } }); } catch (error: any) { console.error('[wx-login] 创建任务失败', { error: error?.message }); res.status(502).json({ ok: false, error: error.message }); } });
     app.get('/api/wx-login/tasks/:taskId/qr', (req, res) => { const task = findTask(req, res); if (task) res.type('jpeg').send(task.qr); });
     app.delete('/api/wx-login/tasks/:taskId', (req, res) => {
         const task = tasks.get(String(req.params.taskId || ''));
@@ -55,7 +55,14 @@ function mountWxLoginRoutes(app: Application, ctx: AdminContext): void {
         if (!task) return;
         if (!task.pending) {
             task.pending = poll(task)
-                .catch(() => { task.status = 'failed'; })
+                .then(() => { task.pollErrors = 0; })
+                .catch((error: any) => {
+                    // 偶发网络抖动不应直接判死：连续失败 5 次才置为 failed
+                    task.pollErrors = (task.pollErrors || 0) + 1;
+                    task.lastError = String(error?.message || 'poll failed');
+                    console.warn('[wx-login] 轮询失败', { taskId: task.id, count: task.pollErrors, error: task.lastError });
+                    if (task.pollErrors >= 5) task.status = 'failed';
+                })
                 .finally(() => { task.pending = undefined; });
         }
         await Promise.race([
@@ -66,7 +73,7 @@ function mountWxLoginRoutes(app: Application, ctx: AdminContext): void {
         if (task.status === 'cancelled' || task.status === 'expired') destroy(task);
         res.json({ ok: true, data });
     });
-    app.post('/api/wx-login/tasks/:taskId/confirm', async (req, res) => { const task = findTask(req, res); if (!task) return; try { if (!task.pending) task.pending = confirm(task).finally(() => { task.pending = undefined; }); await task.pending; res.json({ ok: true, data: publicTask(task) }); } catch (error: any) { task.status = 'failed'; destroy(task); res.status(502).json({ ok: false, error: error.message }); } });
-    app.post('/api/wx-login/tasks/:taskId/code', async (req, res) => { const task = findTask(req, res); if (!task) return; try { if (!task.pending) task.pending = consumeCode(task).finally(() => { task.pending = undefined; }); await task.pending; const data = { openid: task.session.openid, app_id: TARGET_APP_ID, code: task.code, nickname: task.session.nickname || '', err_msg: 'login:ok' }; destroy(task); res.json({ ok: true, data }); } catch (error: any) { task.status = 'failed'; destroy(task); res.status(502).json({ ok: false, error: error.message }); } });
+    app.post('/api/wx-login/tasks/:taskId/confirm', async (req, res) => { const task = findTask(req, res); if (!task) return; try { if (!task.pending) task.pending = confirm(task).finally(() => { task.pending = undefined; }); await task.pending; res.json({ ok: true, data: publicTask(task) }); } catch (error: any) { task.status = 'failed'; task.lastError = String(error?.message || ''); console.error('[wx-login] 接口失败', { taskId: task.id, step: 'confirm/code', error: task.lastError }); res.status(502).json({ ok: false, error: error.message }); } });
+    app.post('/api/wx-login/tasks/:taskId/code', async (req, res) => { const task = findTask(req, res); if (!task) return; try { if (!task.pending) task.pending = consumeCode(task).finally(() => { task.pending = undefined; }); await task.pending; const data = { openid: task.session.openid, app_id: TARGET_APP_ID, code: task.code, nickname: task.session.nickname || '', err_msg: 'login:ok' }; destroy(task); res.json({ ok: true, data }); } catch (error: any) { task.status = 'failed'; task.lastError = String(error?.message || ''); console.error('[wx-login] 接口失败', { taskId: task.id, step: 'confirm/code', error: task.lastError }); res.status(502).json({ ok: false, error: error.message }); } });
 }
 module.exports = { mountWxLoginRoutes };

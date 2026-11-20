@@ -108,7 +108,25 @@ function mountAccountRoutes(app: Application, ctx: AdminContext): void {
             // 多租户：账号归属与数量配额
             if (current && current.role !== 'admin') {
                 if (isUpdate && !canAccessAccount(ctx, req, payload.id)) {
-                    return res.status(403).json({ ok: false, error: '无权操作此账号' });
+                    const target = getAccountList(ctx).find((item: any) => String(item.id) === String(payload.id));
+                    const owner = target ? getAccountOwner(target) : '';
+                    if (!owner) {
+                        // 无主账号（早期版本归属字段被清空留下的）：谁保存就归谁。
+                        // 有主账号仍然严格拦截，避免互相抢占。
+                        payload.ownerUsername = current.username;
+                        console.warn('[account] 自动认领无主账号', {
+                            user: current.username,
+                            accountId: payload.id,
+                            accountName: payload.name || (target && target.name) || '',
+                        });
+                    }
+                    else {
+                        console.warn('[account] 越权保存被拒', { user: current.username, accountId: payload.id, owner });
+                        return res.status(403).json({
+                            ok: false,
+                            error: `无权操作此账号（归属：${owner}，当前登录：${current.username}）`,
+                        });
+                    }
                 }
                 if (!isUpdate) {
                     const userStore = require('../../models/user-store');
