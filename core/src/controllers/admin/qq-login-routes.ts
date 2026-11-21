@@ -67,8 +67,8 @@ function mountQqLoginRoutes(app: Application, ctx: AdminContext): void {
             const message = String(error?.message || '');
             // 上一轮工作流尚未释放：把人放回队首，让前端继续等
             if (message.includes('繁忙') || message.includes('BUSY')) {
-                const requeued = qqQueue.requestSlot(username);
-                return res.json({ ok: true, data: queuedPayload(requeued.entry, Math.max(1, requeued.position), requeued.total, '上一个扫码任务还在收尾，稍等几秒') });
+                qqQueue.demote(slot.entry.id);
+                return res.json({ ok: true, data: queuedPayload(slot.entry, 1, qqQueue.queueOrder().length, '上一个扫码任务还在收尾，稍等几秒') });
             }
             qqQueue.release(slot.entry.id);
             return sendError(res, error, 'QQ 登录任务创建失败');
@@ -112,8 +112,10 @@ function mountQqLoginRoutes(app: Application, ctx: AdminContext): void {
         }
         catch (error: any) {
             const message = String(error?.message || '');
-            if (message.includes('繁忙') || message.includes('BUSY'))
-                return res.json({ ok: true, data: queuedPayload(entry, 1, 1, '上一个扫码任务还在收尾，稍等几秒') });
+            if (message.includes('繁忙') || message.includes('BUSY')) {
+                qqQueue.demote(entry.id);
+                return res.json({ ok: true, data: queuedPayload(entry, 1, qqQueue.queueOrder().length, '上一个扫码任务还在收尾，稍等几秒') });
+            }
             qqQueue.release(entry.id);
             return sendError(res, error, 'QQ 登录二维码获取失败');
         }

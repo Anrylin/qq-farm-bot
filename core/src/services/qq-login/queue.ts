@@ -113,6 +113,16 @@ function promoteNext(): SlotResult | null {
     return { kind: 'active', entry: next, position: 0, total: queueOrder().length };
 }
 
+/** 抢不到 NapCat 工作流时退回排队状态，避免占着位置不放 */
+function demote(entryId: string): void {
+    const entry = entries.find(item => item.id === entryId);
+    if (!entry) return;
+    entry.status = 'queued';
+    entry.activatedAt = undefined;
+    entry.taskId = undefined;
+    entry.qrImage = undefined;
+}
+
 function attachTask(entryId: string, taskId: string, qrImage?: string): void {
     const entry = entries.find(item => item.id === entryId);
     if (!entry) return;
@@ -179,6 +189,7 @@ module.exports = {
     promoteFor,
     attachTask,
     release,
+    demote,
     releaseByTaskId,
     getEntry,
     positionOf,
