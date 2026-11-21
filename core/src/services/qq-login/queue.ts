@@ -21,6 +21,8 @@ interface Entry {
     /** queued 排队中 / active 已拿到二维码 / done 已结束 */
     status: 'queued' | 'active' | 'done';
     taskId?: string;
+    /** 该任务对应的二维码（data URL），重建会话时直接复用，避免前端拿到空码 */
+    qrImage?: string;
     activatedAt?: number;
 }
 
@@ -111,10 +113,11 @@ function promoteNext(): SlotResult | null {
     return { kind: 'active', entry: next, position: 0, total: queueOrder().length };
 }
 
-function attachTask(entryId: string, taskId: string): void {
+function attachTask(entryId: string, taskId: string, qrImage?: string): void {
     const entry = entries.find(item => item.id === entryId);
     if (!entry) return;
     entry.taskId = taskId;
+    if (qrImage) entry.qrImage = qrImage;
     entry.activatedAt = now();
 }
 

@@ -42,12 +42,25 @@ function mountQqLoginRoutes(app: Application, ctx: AdminContext): void {
     app.post('/api/qq-login/tasks', async (req: Request & { currentUser?: any }, res: Response) => {
         const username = String((req as any).currentUser?.username || 'anonymous');
         const slot = qqQueue.requestSlot(username);
+        // 同一用户重复点击：直接复用已经拿到的任务与二维码，避免重复占用 NapCat 工作流
+        if (slot.entry.taskId && slot.entry.qrImage) {
+            return res.json({
+                ok: true,
+                data: {
+                    ...queuedPayload(slot.entry, 0, 0),
+                    queued: false,
+                    task_id: slot.entry.taskId,
+                    status: 'waiting_scan',
+                    qr_image: slot.entry.qrImage,
+                },
+            });
+        }
         if (slot.kind === 'queued') {
             return res.json({ ok: true, data: queuedPayload(slot.entry, slot.position, slot.total) });
         }
         try {
             const task = await createLoginTask();
-            qqQueue.attachTask(slot.entry.id, task.taskId);
+            qqQueue.attachTask(slot.entry.id, task.taskId, task.qrImage);
             return res.json({ ok: true, data: publicTask(task) });
         }
         catch (error: any) {
@@ -74,13 +87,27 @@ function mountQqLoginRoutes(app: Application, ctx: AdminContext): void {
                 return res.json({ ok: true, data: queuedPayload(entry, qqQueue.positionOf(entry), qqQueue.queueOrder().length) });
         }
 
-        if (entry.taskId) {
-            return res.json({ ok: true, data: { ...queuedPayload(entry, 0, 0), queued: false, task_id: entry.taskId } });
+        if (entry.taskId && entry.qrImage) {
+            return res.json({
+                ok: true,
+                data: {
+                    ...queuedPayload(entry, 0, 0),
+                    queued: false,
+                    task_id: entry.taskId,
+                    status: 'waiting_scan',
+                    qr_image: entry.qrImage,
+                },
+            });
+        }
+        // 有任务号但没缓存二维码（旧数据）：按已失效处理，让前端重新发起
+        if (entry.taskId && !entry.qrImage) {
+            qqQueue.release(entry.id);
+            return res.json({ ok: false, error: '排队已轮到，但二维码已过期，请重新发起 QQ 扫码' });
         }
 
         try {
             const task = await createLoginTask();
-            qqQueue.attachTask(entry.id, task.taskId);
+            qqQueue.attachTask(entry.id, task.taskId, task.qrImage);
             return res.json({ ok: true, data: publicTask(task) });
         }
         catch (error: any) {
