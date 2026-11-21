@@ -75,7 +75,10 @@ function mountAccountRoutes(app: Application, ctx: AdminContext): void {
             if (!requestedName) {
                 return res.status(400).json({ ok: false, error: '账号备注不能为空' });
             }
-            const visibleAccounts = getAccountList(ctx);
+            // 只在本用户可见的账号里按备注匹配。
+            // 之前用全量账号匹配，导致 A 扫一个和 B 同名的新号时，
+            // 会被当成"给 B 的账号重新登录"，进而 403。
+            const visibleAccounts = getVisibleAccounts(ctx, req);
             const remarkMatchedAccount = !body.id && requestedName
                 ? visibleAccounts.find((account: any) => String(account.name || '').trim() === requestedName)
                 : null;
