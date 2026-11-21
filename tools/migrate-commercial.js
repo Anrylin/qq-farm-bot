@@ -69,7 +69,9 @@ const users = rawUsers.map((user) => {
         createdAt: Number(user.createdAt) || Date.now(),
         expiresAt: Number(user.expiresAt) || 0, // 0 = 永久
         locked: user.locked === true,
-        isAgent: user.isAgent === true || Number(user.registrationQuota) > 0 || Number(user.quotaCardQuota) > 0,
+        // 只认源数据里的 isAgent，不能按"有额度"推断——
+        // 普通用户也可能残留额度字段，误判会凭空造出代理。
+        isAgent: user.isAgent === true,
         registrationQuota: Number(user.registrationQuota) || 0,
         quotaCardQuota: Number(user.quotaCardQuota) || 0,
     }
