@@ -88,9 +88,17 @@ function inScene(run: (cells: any) => Promise<any>): Promise<any> {
                     // 调用方取消后仍在原队列任务中恢复场景。
                     await runWithSendContext({ check: () => null, onSent: () => {} }, () => network.loginGameScene(previous));
                 } catch (error: any) {
-                    logWarn('牧场', `恢复场景 ${previous} 失败：${error.message}`, { module: 'ranch', event: 'ranch_scene_restore' });
-                    network.invalidateGameScene('牧场操作结束后场景恢复未确认，需要重新登录');
-                    if (result) Object.assign(result, { sceneRestored: false, refreshRequired: true, notice: '场景恢复未确认，账号需重新登录；请刷新核对操作结果' });
+                    logWarn('牧场', `恢复场景 ${previous} 失败：${error.message}，正在重试`, { module: 'ranch', event: 'ranch_scene_restore' });
+                    // 一次超时就把整号判死太激进（网络抖动很常见），先重试一次。
+                    try {
+                        await new Promise(resolve => setTimeout(resolve, 1500));
+                        await runWithSendContext({ check: () => null, onSent: () => {} }, () => network.loginGameScene(previous));
+                        logWarn('牧场', `恢复场景 ${previous} 重试成功`, { module: 'ranch', event: 'ranch_scene_restore_retry' });
+                    } catch (retryError: any) {
+                        logWarn('牧场', `恢复场景 ${previous} 重试仍失败：${retryError.message}`, { module: 'ranch', event: 'ranch_scene_restore_failed' });
+                        network.invalidateGameScene('牧场操作结束后场景恢复未确认，需要重新登录');
+                        if (result) Object.assign(result, { sceneRestored: false, refreshRequired: true, notice: '场景恢复未确认，账号需重新登录；请刷新核对操作结果' });
+                    }
                 }
             }
         }
