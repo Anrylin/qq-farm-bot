@@ -2,7 +2,7 @@
 
 这里提供 QQ 农场助手的正式发布版、安装包和更新说明。应用源码单独维护，此仓库不包含应用源码，也不需要部署者提供个人 GitHub 令牌。
 
-当前正式版本：**v2026.11.25.11** · [版本与更新记录](https://github.com/Anrylin/qq-farm-bot/releases)
+当前正式版本：**v2026.11.25.12** · [版本与更新记录](https://github.com/Anrylin/qq-farm-bot/releases)
 
 ## 近期更新
 
