@@ -1,0 +1,49 @@
+name: Publish public update
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Existing public release tag
+        required: true
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.version || github.ref_name }}
+      - name: Validate public release files
+        env:
+          RELEASE_VERSION: ${{ inputs.version || github.ref_name }}
+        run: |
+          python3 - <<'PY'
+          import json, os, re, hashlib
+          from pathlib import Path
+          manifest = json.loads(Path('farm-update.json').read_text())
+          assert manifest['version'] == os.environ['RELEASE_VERSION']
+          assert re.fullmatch(r'v[a-zA-Z0-9._-]+', manifest['version'])
+          assert re.fullmatch(r'ghcr.io/[a-z0-9._-]+/[a-z0-9._/-]+@sha256:[a-f0-9]{64}', manifest['image'])
+          assert re.fullmatch(r'[a-f0-9]{64}', manifest['sessionProtocol'])
+          expected = {'README.md','DEPLOY.md','RELEASE_NOTES.md','farm-update.json','qqfarm-deploy.tar.gz','SHA256SUMS','.github/workflows/publish.yml'}
+          expected.update('docs/images/'+name+'.png' for name in ['login-desktop','login-mobile','overview-desktop','overview-mobile','activity-desktop'])
+          import subprocess
+          actual = set(subprocess.check_output(['git','ls-files'],text=True).splitlines())
+          assert actual == expected, 'Unexpected files in public update repository: '+str(actual ^ expected)
+          for line in Path('SHA256SUMS').read_text().splitlines():
+              digest, filename = line.split('  ', 1)
+              assert filename in {'farm-update.json','qqfarm-deploy.tar.gz'}
+              assert hashlib.sha256(Path(filename).read_bytes()).hexdigest() == digest
+          PY
+      - name: Publish downloadable update assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_VERSION: ${{ inputs.version || github.ref_name }}
+        run: |
+          if ! gh release view "$RELEASE_VERSION" >/dev/null 2>&1; then
+            gh release create "$RELEASE_VERSION" --target "$GITHUB_SHA" --title "$RELEASE_VERSION" --notes-file RELEASE_NOTES.md
+          fi
+          gh release upload "$RELEASE_VERSION" farm-update.json qqfarm-deploy.tar.gz SHA256SUMS --clobber
