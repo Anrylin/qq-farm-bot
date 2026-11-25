@@ -47,3 +47,4 @@ jobs:
             gh release create "$RELEASE_VERSION" --target "$GITHUB_SHA" --title "$RELEASE_VERSION" --notes-file RELEASE_NOTES.md
           fi
           gh release upload "$RELEASE_VERSION" farm-update.json qqfarm-deploy.tar.gz SHA256SUMS --clobber
+          gh release edit "$RELEASE_VERSION" --draft=false --prerelease=false --latest
