@@ -2,7 +2,7 @@
 
 这里提供 QQ 农场助手的正式发布版、安装包和更新说明。应用源码单独维护，此仓库不包含应用源码，也不需要部署者提供个人 GitHub 令牌。
 
-当前正式版本：**v2026.11.25.6** · [版本与更新记录](https://github.com/Anrylin/qq-farm-bot-updates/releases)
+当前正式版本：**v2026.11.25.7** · [版本与更新记录](https://github.com/Anrylin/qq-farm-bot/releases)
 
 ## 近期更新
 
@@ -39,7 +39,7 @@
 mkdir qqfarm-deploy
 cd qqfarm-deploy
 curl -fL --retry 3 -o qqfarm-deploy.tar.gz \
-  https://github.com/Anrylin/qq-farm-bot-updates/releases/latest/download/qqfarm-deploy.tar.gz
+  https://github.com/Anrylin/qq-farm-bot/releases/latest/download/qqfarm-deploy.tar.gz
 tar -xzf qqfarm-deploy.tar.gz
 sudo bash install.sh --plan
 sudo bash install.sh --bind 0.0.0.0 --port 3007
@@ -50,7 +50,7 @@ sudo bash install.sh --bind 0.0.0.0 --port 3007
 更新源保持 `Anrylin/qq-farm-bot`，镜像保持 `ghcr.io/anrylin/qq-farm-bot`；旧通用部署沿用原地址。源码仓库调整不会要求部署者登录 GitHub。
 
 - [完整安装与维护说明](DEPLOY.md)
-- [正式版下载](https://github.com/Anrylin/qq-farm-bot-updates/releases/latest)
+- [正式版下载](https://github.com/Anrylin/qq-farm-bot/releases/latest)
 - [本版更新内容](RELEASE_NOTES.md)
 
 本仓库只发布更新清单、安装工具、界面截图与预构建镜像地址。GitHub 自动生成的 Source code 压缩包也只包含这些发布文件，请部署网站时使用 `qqfarm-deploy.tar.gz`。
